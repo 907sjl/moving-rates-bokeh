@@ -743,6 +743,19 @@ def create_window_buttons(doc: Document,
 # END create_window_buttons
 
 
+def link_line_mutes(upper_plot: MovingRatesPlot, lower_plot: MovingVolumesPlot) -> None:
+    """Links the muted state of the lines in the moving rates plot and the moving volumes plot."""
+    upper_plot_lines = upper_plot.get_lines()
+    lower_plot_lines = lower_plot.get_lines()
+
+    for line1, line2 in zip(upper_plot_lines, lower_plot_lines):
+        cb = CustomJS(args=dict(line1=line1, line2=line2),
+                      code="""
+                        line2.muted = line1.muted
+                      """)
+        line1.js_on_change('muted', cb)
+
+
 def create_range_sliders(upper_plot: figure,
                          lower_plot: figure) -> tuple[ConnectedXDateRangeSlider, ConnectedYRangeSlider]:
     """Returns X and Y axis sliders that are connected to the given plot."""
@@ -799,12 +812,12 @@ process_record_transforms(referral_df)
 print('calculating rolling measures...')
 rolling_measures_df, first_measure_dt, last_measure_dt = calculate_rolling_measures(referral_df)
 print('adding Bokeh plots...')
-rolling_measures_df.to_csv('test.csv')
 rates_plot = MovingRatesPlot(rolling_measures_df, first_measure_dt)
 volumes_plot = MovingVolumesPlot(rolling_measures_df, first_measure_dt, rates_plot.get_shared_crosshair())
 x_range_slider, y_range_slider = create_range_sliders(rates_plot.get_figure(), volumes_plot.get_figure())
 clinic_slicer = ClinicSlicer(rates_plot.get_source(), volumes_plot.get_source(), rolling_measures_df)
 window_buttons = create_window_buttons(curdoc(), rates_plot, volumes_plot)
+link_line_mutes(rates_plot, volumes_plot)
 add_layout(curdoc(),
            rates_plot.get_figure(),
            volumes_plot.get_figure(),
