@@ -1,3 +1,5 @@
+from functools import partial
+
 import pandas as pd
 
 from datetime import datetime
@@ -81,7 +83,7 @@ class MovingVolumesPlot:
                            tools=[PanTool(), BoxZoomTool(), SaveTool(), ResetTool()])
 
         self.plot.yaxis.formatter = NumeralTickFormatter(format='#,##0')
-        self.plot.yaxis.axis_label = "# of Referrals"
+        self.plot.yaxis.axis_label = "Moving Volume"
         self.plot.yaxis.axis_label_text_font = "arial"
         self.plot.yaxis.axis_label_text_font_size = "12pt"
         self.plot.yaxis.axis_label_text_font_style = "normal"
@@ -352,102 +354,56 @@ class ConnectedXDateRangeSlider:
                  end: float,
                  step: float,
                  value: tuple[float, float],
-                 upper_plot: figure,
-                 lower_plot: figure) -> None:
+                 plots: list[figure]) -> None:
         self.slider = DateRangeSlider(title=title, start=start, end=end, step=step, value=value)
-        self.upper_plot = upper_plot
-        self.lower_plot = lower_plot
-        self.slider.on_change('value', self._update_plot_range)
-        self.upper_plot.x_range.on_change('start', self._update_slider_start, self._update_lower_plot_start)
-        self.upper_plot.x_range.on_change('end', self._update_slider_end, self._update_lower_plot_end)
-        self.lower_plot.x_range.on_change('start', self._update_slider_start, self._update_upper_plot_start)
-        self.lower_plot.x_range.on_change('end', self._update_slider_end, self._update_upper_plot_end)
+        self.plots = plots
+        self.callbacks = []
+        self.slider.on_change('value', self._update_plot_ranges_from_slider)
+        for plot in self.plots:
+            cb = partial(self._update_ranges_from_plot, plot=plot)
+            self.callbacks.append(cb)
+            plot.x_range.on_change('start', cb)
+            plot.x_range.on_change('end', cb)
     # END __init__
 
-    def _update_slider_start(self, attr, old, new):
-        """Updates the start value in the range slider's value tuple with the given new value."""
+    def _disable_callbacks(self, exception_plot: figure = None) -> None:
+        """Disables all callbacks excepting the callbacks on the given plot."""
+        self.slider.remove_on_change('value', self._update_plot_ranges_from_slider)
+        for plot, cb in zip(self.plots, self.callbacks):
+            if ~(plot == exception_plot):
+                plot.x_range.remove_on_change('start', cb)
+                plot.x_range.remove_on_change('end', cb)
+
+    def _enable_callbacks(self, exception_plot: figure = None) -> None:
+        """Re-enables all callbacks excepting the callbacks on the given plot."""
+        self.slider.on_change('value', self._update_plot_ranges_from_slider)
+        for plot, cb in zip(self.plots, self.callbacks):
+            if ~(plot == exception_plot):
+                plot.x_range.on_change('start', cb)
+                plot.x_range.on_change('end', cb)
+
+    def _update_ranges(self, new: tuple[float, float], exception_plot: figure = None) -> None:
+        """Updates the ranges on all plots except the given plot with the given tuple of start, end values."""
+        for plot in self.plots:
+            if ~(plot == exception_plot):
+                plot.x_range.start = new[0]
+                plot.x_range.end = new[1]
+
+    def _update_ranges_from_plot(self, attr, old, new, plot: figure) -> None:
+        """Updates the start and end range values in the slider and the x-axes of connected plots from a given plot."""
         # Stop changes caused by this callback from reflecting as another callback
-        self.slider.remove_on_change('value', self._update_plot_range)
-        # Update slider set points to match figure range
-        new_value = (self.upper_plot.x_range.start, self.upper_plot.x_range.end)
+        self._disable_callbacks(plot)
+        new_value = (plot.x_range.start, plot.x_range.end)
         self.slider.update(value=new_value)
-        # Re-enable callback to respond to future changes to slider set points
-        self.slider.on_change('value', self._update_plot_range)
-    # END _update_slider_start
+        self._update_ranges(new_value, plot)
+        self._enable_callbacks(plot)
 
-    def _update_slider_end(self, attr, old, new):
-        """Updates the end value in the range slider's value tuple with the given new value."""
+    def _update_plot_ranges_from_slider(self, attr, old, new) -> None:
+        """Updates the start and end range values in the x-axis of all plots using the values from the slider."""
         # Stop changes caused by this callback from reflecting as another callback
-        self.slider.remove_on_change('value', self._update_plot_range)
-        # Update slider set points to match figure range
-        new_value = (self.upper_plot.x_range.start, self.upper_plot.x_range.end)
-        self.slider.update(value=new_value)
-        # Re-enable callback to respond to future changes to slider set points
-        self.slider.on_change('value', self._update_plot_range)
-    # END _update_slider_end
-
-    def _update_lower_plot_start(self, attr, old, new):
-        """Updates the lower plot figure's x-axis start value from the given new value."""
-        # Stop changes caused by this callback from reflecting as another callback
-        self.lower_plot.x_range.remove_on_change('start', self._update_slider_start, self._update_upper_plot_start)
-        # Update figure range to match given value
-        self.lower_plot.x_range.start = new
-        # Re-enable callback for future changes to zoom box and pan
-        self.lower_plot.x_range.on_change('start', self._update_slider_start, self._update_upper_plot_start)
-    # END _update_lower_plot_start
-
-    def _update_lower_plot_end(self, attr, old, new):
-        """Updates the lower plot figure's x-axis end value from the given new value."""
-        # Stop changes caused by this callback from reflecting as another callback
-        self.lower_plot.x_range.remove_on_change('end', self._update_slider_end, self._update_upper_plot_end)
-        # Update figure range to match given value
-        self.lower_plot.x_range.end = new
-        # Re-enable callback for future changes to zoom box and pan
-        self.lower_plot.x_range.on_change('end', self._update_slider_end, self._update_upper_plot_end)
-    # END _update_lower_plot_end
-
-    def _update_upper_plot_start(self, attr, old, new):
-        """Updates the upper plot figure's x-axis start value from the given new value."""
-        # Stop changes caused by this callback from reflecting as another callback
-        self.upper_plot.x_range.remove_on_change('start', self._update_slider_start, self._update_lower_plot_start)
-        # Update figure range to match given value
-        self.upper_plot.x_range.start = new
-        # Re-enable callback for future changes to zoom box and pan
-        self.upper_plot.x_range.on_change('start', self._update_slider_start, self._update_lower_plot_start)
-    # END _update_upper_plot_start
-
-    def _update_upper_plot_end(self, attr, old, new):
-        """Updates the upper plot figure's x-axis end value from the given new value."""
-        # Stop changes caused by this callback from reflecting as another callback
-        self.upper_plot.x_range.remove_on_change('end', self._update_slider_end, self._update_lower_plot_end)
-        # Update figure range to match given value
-        self.upper_plot.x_range.end = new
-        # Re-enable callback for future changes to zoom box and pan
-        self.upper_plot.x_range.on_change('end', self._update_slider_end, self._update_lower_plot_end)
-    # END _update_upper_plot_end
-
-    def _update_plot_range(self, attr, old, new):
-        """Updates the plot figure's x-axis start and end values from the given new range tuple."""
-
-        # Stop changes caused by this callback from reflecting as another callback
-        self.upper_plot.x_range.remove_on_change('start', self._update_slider_start, self._update_lower_plot_start)
-        self.upper_plot.x_range.remove_on_change('end', self._update_slider_end, self._update_lower_plot_end)
-        self.lower_plot.x_range.remove_on_change('start', self._update_slider_start, self._update_upper_plot_start)
-        self.lower_plot.x_range.remove_on_change('end', self._update_slider_end, self._update_upper_plot_end)
-
-        # Update figure range to match slider set points
-        new_value = list(new)
-        self.upper_plot.x_range.start = new_value[0]
-        self.upper_plot.x_range.end = new_value[1]
-        self.lower_plot.x_range.start = new_value[0]
-        self.lower_plot.x_range.end = new_value[1]
-
-        # Re-enable callbacks to respond to zoom box and pan
-        self.upper_plot.x_range.on_change('start', self._update_slider_start, self._update_lower_plot_start)
-        self.upper_plot.x_range.on_change('end', self._update_slider_end, self._update_lower_plot_end)
-        self.lower_plot.x_range.on_change('start', self._update_slider_start, self._update_upper_plot_start)
-        self.lower_plot.x_range.on_change('end', self._update_slider_end, self._update_upper_plot_end)
-    # END _update_plot_range
+        self._disable_callbacks()
+        self._update_ranges(new)
+        self._enable_callbacks()
 
     def get_slider_model(self) -> DateRangeSlider:
         """Returns the Bokeh model object associated with the slider widget."""
@@ -765,8 +721,7 @@ def create_range_sliders(upper_plot: figure,
         end=upper_plot.x_range.end,
         step=1,
         value=(upper_plot.x_range.start, upper_plot.x_range.end),
-        upper_plot=upper_plot,
-        lower_plot=lower_plot)
+        plots=[upper_plot, lower_plot])
 
     y = ConnectedYRangeSlider(
         title='y-axis range',
@@ -794,8 +749,8 @@ def add_layout(doc: Document,
     spacer = Div(text=' ', margin=(20, 5, 5, 5))
     spacer2 = Div(text=' ', margin=(20, 5, 5, 5))
     note = Div(text='Click on items in the legend to mute their display')
-    upper_plot.height = 450
-    lower_plot.height = 275
+    upper_plot.height = 375
+    lower_plot.height = 200
     inputs = Column(slicer_title, slicer, cb_title, cb, spacer, x, y, spacer2, note)
     plots = Column(upper_plot, lower_plot)
     doc.add_root(Row(plots, inputs, width=800))
