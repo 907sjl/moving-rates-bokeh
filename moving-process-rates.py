@@ -17,6 +17,93 @@ from bokeh.models.formatters import NumeralTickFormatter
 from bokeh.models.tools import HoverTool, CrosshairTool, PanTool, BoxZoomTool, SaveTool, ResetTool
 
 
+class DailyVolumesPlot:
+    """
+    Pairs a Bokeh figure and a ColumnDataSource that can be updated to change the figure. The figure is the plot of
+    daily referral volumes that make up the denominator of the moving rate that referrals are seen in 30d across
+    different window sizes.
+
+    Methods:
+         get_figure - Returns the Bokeh figure object associated with the plot
+         get_source - Returns the Bokeh ColumnDataSource object associated with the line glyphs
+         get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
+    """
+
+    def __init__(self,
+                 rolling_df: pd.DataFrame,
+                 start_dt: datetime,
+                 ct: CrosshairTool) -> None:
+        data_df = rolling_df.loc[(rolling_df['Clinic'] == '*ALL*'),
+                                 ['Date',
+                                  '# Aged']].copy()
+        self.cds = ColumnDataSource(data=data_df)
+
+        referrals_x_range = Range1d(start_dt, AS_OF_DATE)
+
+        ht = HoverTool(
+            tooltips=[
+                ('date', '@Date{%F}'),
+                ('# Aged', '@{# Aged}{#,##0}')],
+
+            formatters={
+                '@Date': 'datetime'},
+
+            mode='vline',
+            line_policy='none',
+            toggleable=False
+        )
+
+        self.ct = ct
+
+        self.plot = figure(title=None,
+                           output_backend='svg',
+                           x_axis_type='datetime',
+                           x_range=referrals_x_range,
+                           toolbar_location='below',
+                           tools=[PanTool(), BoxZoomTool(), SaveTool(), ResetTool()])
+
+        self.plot.yaxis.formatter = NumeralTickFormatter(format='#,##0')
+        self.plot.yaxis.axis_label = "Daily Volume"
+        self.plot.yaxis.axis_label_text_font = "arial"
+        self.plot.yaxis.axis_label_text_font_size = "12pt"
+        self.plot.yaxis.axis_label_text_font_style = "normal"
+        self.plot.yaxis.axis_label_text_color = "#434244"
+        self.plot.yaxis.major_label_text_color = "#434244"
+        self.plot.yaxis.major_label_text_font = "arial"
+        self.plot.yaxis.major_label_text_font_size = "12pt"
+        self.plot.min_border_left = 60
+
+        self.plot.xaxis.major_label_text_font = "arial"
+        self.plot.xaxis.major_label_text_font_size = "10pt"
+        self.plot.xaxis.major_label_text_color = "#434244"
+
+        self.lines = [self.plot.line(x='Date',
+                                     y='# Aged',
+                                     line_width=2,
+                                     line_dash='dotted',
+                                     line_color='gray',
+                                     alpha=0.8,
+                                     muted_alpha=0.2,
+                                     source=self.cds)]
+
+        self.plot.add_tools(ht)
+        self.plot.add_tools(self.ct)
+    # END __init__
+
+    def get_figure(self) -> figure:
+        """Returns the Bokeh figure object associated with the plot"""
+        return self.plot
+
+    def get_source(self) -> ColumnDataSource:
+        """Returns the Bokeh ColumnDataSource object associated with the line glyphs"""
+        return self.cds
+
+    def get_lines(self) -> list[GlyphRenderer]:
+        """Returns a list of Bokeh GlyphRenderer objects for the line glyphs"""
+        return self.lines
+# END CLASS DailyVolumesPlot
+
+
 class MovingVolumesPlot:
     """
     Pairs a Bokeh figure and a ColumnDataSource that can be updated to change the figure. The figure is the plot of
@@ -305,9 +392,12 @@ class ClinicSlicer:
         get_slicer_model - Returns the Bokeh model object associated with the slicer widget
     """
 
-    def __init__(self, upper_cds: ColumnDataSource, lower_cds: ColumnDataSource, df: pd.DataFrame) -> None:
-        self.upper_cds = upper_cds
-        self.lower_cds = lower_cds
+    def __init__(self,
+                 moving_sources: list[ColumnDataSource],
+                 daily_sources: list[ColumnDataSource],
+                 df: pd.DataFrame) -> None:
+        self.moving_sources = moving_sources
+        self.daily_sources = daily_sources
         self.df = df
         self.clinics = df['Clinic'].unique().tolist()[::1]
         self.clinic_select = Select(value='*ALL*', options=self.clinics)
@@ -316,21 +406,26 @@ class ClinicSlicer:
     def _clinic_slicer_callback(self, attr: str, old, new) -> None:
         """This function is assigned to Bokeh models as a callback and filters the data by clinic name."""
         idx = (self.df['Clinic'] == new)
-        new_df = (self.df.loc[idx, ['Date',
-                                    'Moving 28d % Seen in 30d',
-                                    'Moving 91d % Seen in 30d',
-                                    'Moving 182d % Seen in 30d',
-                                    'Moving 364d % Seen in 30d',
-                                    'Moving 28d # Aged',
-                                    'Moving 91d # Aged',
-                                    'Moving 182d # Aged',
-                                    'Moving 364d # Aged']].copy())
-        new_df['28d Tooltip'] = new_df['Moving 28d % Seen in 30d'] * 100.0
-        new_df['91d Tooltip'] = new_df['Moving 91d % Seen in 30d'] * 100.0
-        new_df['182d Tooltip'] = new_df['Moving 182d % Seen in 30d'] * 100.0
-        new_df['364d Tooltip'] = new_df['Moving 364d % Seen in 30d'] * 100.0
-        self.upper_cds.data = create_dict_like_bokeh_does(new_df)
-        self.lower_cds.data = create_dict_like_bokeh_does(new_df)
+        moving_df = (self.df.loc[idx, ['Date',
+                                       'Moving 28d % Seen in 30d',
+                                       'Moving 91d % Seen in 30d',
+                                       'Moving 182d % Seen in 30d',
+                                       'Moving 364d % Seen in 30d',
+                                       'Moving 28d # Aged',
+                                       'Moving 91d # Aged',
+                                       'Moving 182d # Aged',
+                                       'Moving 364d # Aged']].copy())
+        moving_df['28d Tooltip'] = moving_df['Moving 28d % Seen in 30d'] * 100.0
+        moving_df['91d Tooltip'] = moving_df['Moving 91d % Seen in 30d'] * 100.0
+        moving_df['182d Tooltip'] = moving_df['Moving 182d % Seen in 30d'] * 100.0
+        moving_df['364d Tooltip'] = moving_df['Moving 364d % Seen in 30d'] * 100.0
+        for cds in self.moving_sources:
+            cds.data = create_dict_like_bokeh_does(moving_df)
+
+        daily_df = (self.df.loc[idx, ['Date',
+                                      '# Aged']].copy())
+        for cds in self.daily_sources:
+            cds.data = create_dict_like_bokeh_does(daily_df)
     # END clinic_filter_callback
 
     def get_slicer_model(self) -> Select:
@@ -712,16 +807,15 @@ def link_line_mutes(upper_plot: MovingRatesPlot, lower_plot: MovingVolumesPlot) 
         line1.js_on_change('muted', cb)
 
 
-def create_range_sliders(upper_plot: figure,
-                         lower_plot: figure) -> tuple[ConnectedXDateRangeSlider, ConnectedYRangeSlider]:
-    """Returns X and Y axis sliders that are connected to the given plot."""
+def create_range_sliders(plots: list[figure]) -> tuple[ConnectedXDateRangeSlider, ConnectedYRangeSlider]:
+    """Returns X and Y axis sliders that are connected to the given plots."""
     x = ConnectedXDateRangeSlider(
         title='x-axis range',
-        start=upper_plot.x_range.start,
-        end=upper_plot.x_range.end,
+        start=plots[0].x_range.start,
+        end=plots[0].x_range.end,
         step=1,
-        value=(upper_plot.x_range.start, upper_plot.x_range.end),
-        plots=[upper_plot, lower_plot])
+        value=(plots[0].x_range.start, plots[0].x_range.end),
+        plots=plots)
 
     y = ConnectedYRangeSlider(
         title='y-axis range',
@@ -730,7 +824,7 @@ def create_range_sliders(upper_plot: figure,
         step=0.01,
         value=(0.00, 1.00),
         format_str='0 %',
-        plot=upper_plot)
+        plot=plots[0])
 
     return x, y
 # END create_range_sliders
@@ -738,6 +832,7 @@ def create_range_sliders(upper_plot: figure,
 
 def add_layout(doc: Document,
                upper_plot: figure,
+               middle_plot: figure,
                lower_plot: figure,
                x: DateRangeSlider,
                y: RangeSlider,
@@ -750,9 +845,10 @@ def add_layout(doc: Document,
     spacer2 = Div(text=' ', margin=(20, 5, 5, 5))
     note = Div(text='Click on items in the legend to mute their display')
     upper_plot.height = 375
+    middle_plot.height = 200
     lower_plot.height = 200
     inputs = Column(slicer_title, slicer, cb_title, cb, spacer, x, y, spacer2, note)
-    plots = Column(upper_plot, lower_plot)
+    plots = Column(upper_plot, middle_plot, lower_plot)
     doc.add_root(Row(plots, inputs, width=800))
     doc.title = "Moving Process Rates"
 # END add_layout
@@ -769,13 +865,19 @@ rolling_measures_df, first_measure_dt, last_measure_dt = calculate_rolling_measu
 print('adding Bokeh plots...')
 rates_plot = MovingRatesPlot(rolling_measures_df, first_measure_dt)
 volumes_plot = MovingVolumesPlot(rolling_measures_df, first_measure_dt, rates_plot.get_shared_crosshair())
-x_range_slider, y_range_slider = create_range_sliders(rates_plot.get_figure(), volumes_plot.get_figure())
-clinic_slicer = ClinicSlicer(rates_plot.get_source(), volumes_plot.get_source(), rolling_measures_df)
+daily_plot = DailyVolumesPlot(rolling_measures_df, first_measure_dt, rates_plot.get_shared_crosshair())
+x_range_slider, y_range_slider = create_range_sliders([rates_plot.get_figure(),
+                                                       volumes_plot.get_figure(),
+                                                       daily_plot.get_figure()])
+clinic_slicer = ClinicSlicer([rates_plot.get_source(), volumes_plot.get_source()],
+                             [daily_plot.get_source()],
+                             rolling_measures_df)
 window_buttons = create_window_buttons(curdoc(), rates_plot, volumes_plot)
 link_line_mutes(rates_plot, volumes_plot)
 add_layout(curdoc(),
            rates_plot.get_figure(),
            volumes_plot.get_figure(),
+           daily_plot.get_figure(),
            x_range_slider.get_slider_model(),
            y_range_slider.get_slider_model(),
            clinic_slicer.get_slicer_model(),
