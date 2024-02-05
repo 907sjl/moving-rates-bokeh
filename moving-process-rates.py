@@ -1,5 +1,8 @@
 from functools import partial
 
+import numpy as np
+from numpy.polynomial import Polynomial
+
 import pandas as pd
 
 from datetime import datetime
@@ -36,6 +39,8 @@ class DailyVolumesPlot:
         data_df = rolling_df.loc[(rolling_df['Clinic'] == '*ALL*'),
                                  ['Date',
                                   '# Aged']].copy()
+        f = Polynomial.fit(np.array(data_df['Date'], dtype=float), data_df['# Aged'], 4, full=False)
+        data_df['trend'] = (f.convert())(np.array(data_df['Date'], dtype=float))
         self.cds = ColumnDataSource(data=data_df)
 
         referrals_x_range = Range1d(start_dt, AS_OF_DATE)
@@ -48,7 +53,6 @@ class DailyVolumesPlot:
             formatters={
                 '@Date': 'datetime'},
 
-            mode='vline',
             line_policy='none',
             toggleable=False
         )
@@ -77,14 +81,17 @@ class DailyVolumesPlot:
         self.plot.xaxis.major_label_text_font_size = "10pt"
         self.plot.xaxis.major_label_text_color = "#434244"
 
-        self.lines = [self.plot.line(x='Date',
-                                     y='# Aged',
-                                     line_width=2,
-                                     line_dash='dotted',
-                                     line_color='gray',
-                                     alpha=0.8,
-                                     muted_alpha=0.2,
-                                     source=self.cds)]
+        self.glyphs = [self.plot.circle(x='Date',
+                                        y='# Aged',
+                                        alpha=0.2,
+                                        color='blue',
+                                        source=self.cds),
+                       self.plot.line(x='Date',
+                                      y='trend',
+                                      line_color='red',
+                                      line_dash='solid',
+                                      line_width=2,
+                                      source=self.cds)]
 
         self.plot.add_tools(ht)
         self.plot.add_tools(self.ct)
@@ -98,9 +105,9 @@ class DailyVolumesPlot:
         """Returns the Bokeh ColumnDataSource object associated with the line glyphs"""
         return self.cds
 
-    def get_lines(self) -> list[GlyphRenderer]:
+    def get_glyphs(self) -> list[GlyphRenderer]:
         """Returns a list of Bokeh GlyphRenderer objects for the line glyphs"""
-        return self.lines
+        return self.glyphs
 # END CLASS DailyVolumesPlot
 
 
@@ -424,6 +431,8 @@ class ClinicSlicer:
 
         daily_df = (self.df.loc[idx, ['Date',
                                       '# Aged']].copy())
+        f = Polynomial.fit(np.array(daily_df['Date'], dtype=float), daily_df['# Aged'], 4, full=False)
+        daily_df['trend'] = (f.convert())(np.array(daily_df['Date'], dtype=float))
         for cds in self.daily_sources:
             cds.data = create_dict_like_bokeh_does(daily_df)
     # END clinic_filter_callback
@@ -805,6 +814,7 @@ def link_line_mutes(upper_plot: MovingRatesPlot, lower_plot: MovingVolumesPlot) 
                         line2.muted = line1.muted
                       """)
         line1.js_on_change('muted', cb)
+# END link_line_mutes
 
 
 def create_range_sliders(plots: list[figure]) -> tuple[ConnectedXDateRangeSlider, ConnectedYRangeSlider]:
