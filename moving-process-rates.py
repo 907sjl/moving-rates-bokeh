@@ -20,7 +20,17 @@ from bokeh.models.formatters import NumeralTickFormatter
 from bokeh.models.tools import HoverTool, CrosshairTool, PanTool, BoxZoomTool, SaveTool, ResetTool
 
 
-class DailyVolumesPlot:
+class ClinicPlot:
+    """Base class used to identify plots with static methods to create plot data."""
+    @staticmethod
+    def create_dataset(source_df: pd.DataFrame, clinic: str) -> pd.DataFrame:
+        pass
+
+    def get_source(self) -> ColumnDataSource:
+        pass
+
+
+class DailyVolumesPlot(ClinicPlot):
     """
     Pairs a Bokeh figure and a ColumnDataSource that can be updated to change the figure. The figure is the plot of
     daily referral volumes that make up the denominator of the moving rate that referrals are seen in 30d across
@@ -32,15 +42,22 @@ class DailyVolumesPlot:
          get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
     """
 
+    @staticmethod
+    def create_dataset(source_df: pd.DataFrame, clinic: str) -> pd.DataFrame:
+        """Returns a new DataFrame with data for the visual extracted from the given DataFrame."""
+        data_df = source_df.loc[(source_df['Clinic'] == clinic),
+                                ['Date',
+                                 '# Aged']].copy()
+        f = Polynomial.fit(np.array(data_df['Date'], dtype=float), data_df['# Aged'], 1, full=False)
+        data_df['trend'] = (f.convert())(np.array(data_df['Date'], dtype=float))
+        return data_df
+    # END _create_dataset
+
     def __init__(self,
                  rolling_df: pd.DataFrame,
                  start_dt: datetime,
                  ct: CrosshairTool) -> None:
-        data_df = rolling_df.loc[(rolling_df['Clinic'] == '*ALL*'),
-                                 ['Date',
-                                  '# Aged']].copy()
-        f = Polynomial.fit(np.array(data_df['Date'], dtype=float), data_df['# Aged'], 4, full=False)
-        data_df['trend'] = (f.convert())(np.array(data_df['Date'], dtype=float))
+        data_df = self.create_dataset(rolling_df, '*ALL*')
         self.cds = ColumnDataSource(data=data_df)
 
         referrals_x_range = Range1d(start_dt, AS_OF_DATE)
@@ -111,7 +128,7 @@ class DailyVolumesPlot:
 # END CLASS DailyVolumesPlot
 
 
-class MovingVolumesPlot:
+class MovingVolumesPlot(ClinicPlot):
     """
     Pairs a Bokeh figure and a ColumnDataSource that can be updated to change the figure. The figure is the plot of
     moving referral volumes that are the denominator of the rate that referrals are seen in 30d across different window
@@ -123,24 +140,31 @@ class MovingVolumesPlot:
          get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
     """
 
-    def __init__(self,
-                 rolling_df: pd.DataFrame,
-                 start_dt: datetime,
-                 ct: CrosshairTool) -> None:
-        data_df = rolling_df.loc[(rolling_df['Clinic'] == '*ALL*'),
-                                 ['Date',
-                                  'Moving 28d % Seen in 30d',
-                                  'Moving 91d % Seen in 30d',
-                                  'Moving 182d % Seen in 30d',
-                                  'Moving 364d % Seen in 30d',
-                                  'Moving 28d # Aged',
-                                  'Moving 91d # Aged',
-                                  'Moving 182d # Aged',
-                                  'Moving 364d # Aged']].copy()
+    @staticmethod
+    def create_dataset(source_df: pd.DataFrame, clinic: str) -> pd.DataFrame:
+        """Returns a new DataFrame with data for the visual extracted from the given DataFrame."""
+        data_df = source_df.loc[(source_df['Clinic'] == clinic),
+                                ['Date',
+                                 'Moving 28d % Seen in 30d',
+                                 'Moving 91d % Seen in 30d',
+                                 'Moving 182d % Seen in 30d',
+                                 'Moving 364d % Seen in 30d',
+                                 'Moving 28d # Aged',
+                                 'Moving 91d # Aged',
+                                 'Moving 182d # Aged',
+                                 'Moving 364d # Aged']].copy()
         data_df['28d Tooltip'] = data_df['Moving 28d % Seen in 30d'] * 100.0
         data_df['91d Tooltip'] = data_df['Moving 91d % Seen in 30d'] * 100.0
         data_df['182d Tooltip'] = data_df['Moving 182d % Seen in 30d'] * 100.0
         data_df['364d Tooltip'] = data_df['Moving 364d % Seen in 30d'] * 100.0
+        return data_df
+    # END _create_dataset
+
+    def __init__(self,
+                 rolling_df: pd.DataFrame,
+                 start_dt: datetime,
+                 ct: CrosshairTool) -> None:
+        data_df = self.create_dataset(rolling_df, '*ALL*')
         self.cds = ColumnDataSource(data=data_df)
 
         referrals_x_range = Range1d(start_dt, AS_OF_DATE)
@@ -242,7 +266,7 @@ class MovingVolumesPlot:
     # END CLASS MovingVolumesPlot
 
 
-class MovingRatesPlot:
+class MovingRatesPlot(ClinicPlot):
     """
     Pairs a Bokeh figure and a ColumnDataSource that can be updated to change the figure. The figure is the plot of
     moving rates that referrals are seen in 30d across different window sizes.
@@ -253,21 +277,28 @@ class MovingRatesPlot:
          get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
     """
 
-    def __init__(self, rolling_df: pd.DataFrame, start_dt: datetime) -> None:
-        data_df = rolling_df.loc[(rolling_df['Clinic'] == '*ALL*'),
-                                 ['Date',
-                                  'Moving 28d % Seen in 30d',
-                                  'Moving 91d % Seen in 30d',
-                                  'Moving 182d % Seen in 30d',
-                                  'Moving 364d % Seen in 30d',
-                                  'Moving 28d # Aged',
-                                  'Moving 91d # Aged',
-                                  'Moving 182d # Aged',
-                                  'Moving 364d # Aged']].copy()
+    @staticmethod
+    def create_dataset(source_df: pd.DataFrame, clinic: str) -> pd.DataFrame:
+        """Returns a new DataFrame with data for the visual extracted from the given DataFrame."""
+        data_df = source_df.loc[(source_df['Clinic'] == clinic),
+                                ['Date',
+                                 'Moving 28d % Seen in 30d',
+                                 'Moving 91d % Seen in 30d',
+                                 'Moving 182d % Seen in 30d',
+                                 'Moving 364d % Seen in 30d',
+                                 'Moving 28d # Aged',
+                                 'Moving 91d # Aged',
+                                 'Moving 182d # Aged',
+                                 'Moving 364d # Aged']].copy()
         data_df['28d Tooltip'] = data_df['Moving 28d % Seen in 30d'] * 100.0
         data_df['91d Tooltip'] = data_df['Moving 91d % Seen in 30d'] * 100.0
         data_df['182d Tooltip'] = data_df['Moving 182d % Seen in 30d'] * 100.0
         data_df['364d Tooltip'] = data_df['Moving 364d % Seen in 30d'] * 100.0
+        return data_df
+    # END _create_dataset
+
+    def __init__(self, rolling_df: pd.DataFrame, start_dt: datetime) -> None:
+        data_df = self.create_dataset(rolling_df, '*ALL*')
         self.cds = ColumnDataSource(data=data_df)
 
         referrals_x_range = Range1d(start_dt, AS_OF_DATE)
@@ -400,11 +431,9 @@ class ClinicSlicer:
     """
 
     def __init__(self,
-                 moving_sources: list[ColumnDataSource],
-                 daily_sources: list[ColumnDataSource],
+                 plots: list[ClinicPlot],
                  df: pd.DataFrame) -> None:
-        self.moving_sources = moving_sources
-        self.daily_sources = daily_sources
+        self.plots = plots
         self.df = df
         self.clinics = df['Clinic'].unique().tolist()[::1]
         self.clinic_select = Select(value='*ALL*', options=self.clinics)
@@ -412,29 +441,10 @@ class ClinicSlicer:
 
     def _clinic_slicer_callback(self, attr: str, old, new) -> None:
         """This function is assigned to Bokeh models as a callback and filters the data by clinic name."""
-        idx = (self.df['Clinic'] == new)
-        moving_df = (self.df.loc[idx, ['Date',
-                                       'Moving 28d % Seen in 30d',
-                                       'Moving 91d % Seen in 30d',
-                                       'Moving 182d % Seen in 30d',
-                                       'Moving 364d % Seen in 30d',
-                                       'Moving 28d # Aged',
-                                       'Moving 91d # Aged',
-                                       'Moving 182d # Aged',
-                                       'Moving 364d # Aged']].copy())
-        moving_df['28d Tooltip'] = moving_df['Moving 28d % Seen in 30d'] * 100.0
-        moving_df['91d Tooltip'] = moving_df['Moving 91d % Seen in 30d'] * 100.0
-        moving_df['182d Tooltip'] = moving_df['Moving 182d % Seen in 30d'] * 100.0
-        moving_df['364d Tooltip'] = moving_df['Moving 364d % Seen in 30d'] * 100.0
-        for cds in self.moving_sources:
-            cds.data = create_dict_like_bokeh_does(moving_df)
-
-        daily_df = (self.df.loc[idx, ['Date',
-                                      '# Aged']].copy())
-        f = Polynomial.fit(np.array(daily_df['Date'], dtype=float), daily_df['# Aged'], 4, full=False)
-        daily_df['trend'] = (f.convert())(np.array(daily_df['Date'], dtype=float))
-        for cds in self.daily_sources:
-            cds.data = create_dict_like_bokeh_does(daily_df)
+        for plot in self.plots:
+            data_df = plot.create_dataset(self.df, new)
+            cds = plot.get_source()
+            cds.data = create_dict_like_bokeh_does(data_df)
     # END clinic_filter_callback
 
     def get_slicer_model(self) -> Select:
@@ -879,9 +889,7 @@ daily_plot = DailyVolumesPlot(rolling_measures_df, first_measure_dt, rates_plot.
 x_range_slider, y_range_slider = create_range_sliders([rates_plot.get_figure(),
                                                        volumes_plot.get_figure(),
                                                        daily_plot.get_figure()])
-clinic_slicer = ClinicSlicer([rates_plot.get_source(), volumes_plot.get_source()],
-                             [daily_plot.get_source()],
-                             rolling_measures_df)
+clinic_slicer = ClinicSlicer([rates_plot, volumes_plot, daily_plot], rolling_measures_df)
 window_buttons = create_window_buttons(curdoc(), rates_plot, volumes_plot)
 link_line_mutes(rates_plot, volumes_plot)
 add_layout(curdoc(),
