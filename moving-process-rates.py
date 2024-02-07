@@ -29,6 +29,9 @@ class ClinicPlot:
     def get_source(self) -> ColumnDataSource:
         pass
 
+    def reset_y_range(self) -> None:
+        pass
+
 
 class DailyVolumesPlot(ClinicPlot):
     """
@@ -113,6 +116,11 @@ class DailyVolumesPlot(ClinicPlot):
         self.plot.add_tools(ht)
         self.plot.add_tools(self.ct)
     # END __init__
+
+    def reset_y_range(self) -> None:
+        max_y = (self.cds.data['# Aged']).max()
+        self.plot.y_range.start = 0
+        self.plot.y_range.end = max_y
 
     def get_figure(self) -> figure:
         """Returns the Bokeh figure object associated with the plot"""
@@ -251,6 +259,15 @@ class MovingVolumesPlot(ClinicPlot):
         self.plot.add_tools(ht)
         self.plot.add_tools(self.ct)
     # END __init__
+
+    def reset_y_range(self) -> None:
+        max_28d = (self.cds.data['Moving 28d # Aged']).max()
+        max_91d = (self.cds.data['Moving 91d # Aged']).max()
+        max_182d = (self.cds.data['Moving 182d # Aged']).max()
+        max_364d = (self.cds.data['Moving 364d # Aged']).max()
+        max_y = max(max_28d, max_91d, max_182d, max_364d)
+        self.plot.y_range.start = 0
+        self.plot.y_range.end = max_y
 
     def get_figure(self) -> figure:
         """Returns the Bokeh figure object associated with the plot"""
@@ -403,6 +420,10 @@ class MovingRatesPlot(ClinicPlot):
         self.plot.add_tools(self.ct)
     # END __init__
 
+    def reset_y_range(self) -> None:
+        self.plot.y_range.start = 0.0
+        self.plot.y_range.end = 1.0
+
     def get_figure(self) -> figure:
         """Returns the Bokeh figure object associated with the plot"""
         return self.plot
@@ -445,6 +466,7 @@ class ClinicSlicer:
             data_df = plot.create_dataset(self.df, new)
             cds = plot.get_source()
             cds.data = create_dict_like_bokeh_does(data_df)
+            plot.reset_y_range()
     # END clinic_filter_callback
 
     def get_slicer_model(self) -> Select:
