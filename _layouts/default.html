@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: "en-US" }}">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+{% seo %}
+    <link rel="stylesheet" href="{{ "/assets/css/style.css?v=" | append: site.github.build_revision | relative_url }}">
+    <!--[if lt IE 9]>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header class="smallertext">
+        <h3 id="contents">Contents</h3>
+        <div class="tocsingleton"><a href="#quick-start">Quick Start</a></div>
+        <div class="tocsingleton"><a href="#background">Background</a></div>
+        <div class="tocsingleton"><a href="#technology-stack">Technology Stack</a></div>
+        <div class="tocsingleton"><a href="#application-overview">Application Overview</a></div>
+        <div class="tocsingleton"><a href="#data-sources">Data Sources</a></div>
+        <div class="tocsingleton"><a href="#program-structure">Program Structure</a></div>
+        <div class="tocgroup"><a href="#pandas-elt">Pandas ELT</a>
+            <div class="tocitem"><a href="#data-load">Data Load</a></div>
+            <div class="tocitem"><a href="#record-level-transforms">Record Level Transforms</a></div>
+            <div class="tocitemlast"><a href="#window-calculations">Window Calculations</a></div>
+        </div>
+        <div class="tocgroup"><a href="#application-control-layer">Application Control Layer</a>
+            <div class="tocitem"><a href="#plot-classes">Plot Classes</a></div>
+            <div class="tocitem"><a href="#clinic-filter">Clinic Filter</a></div>
+            <div class="tocitem"><a href="#synchronized-axes">Synchronized Axes</a></div>
+            <div class="tocitem"><a href="#linked-line-mutes">Linked Line Mutes</a></div>
+            <div class="tocitemlast"><a href="#showing-and-hiding-lines">Showing and Hiding Lines</a></div>
+        </div>
+        <div class="tocsingleton"><a href="#visualization-layer">Visualization Layer</a></div>
+        <br>
+        <p><small>Hosted on GitHub Pages &mdash;<br>Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </header>
+      <section class="morecontent"> 
+        {{ content }} 
+      </section> 
+    </div>
+    <script src="{{ "/assets/js/scale.fix.js" | relative_url }}"></script>
+  </body>
+</html>
