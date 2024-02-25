@@ -40,6 +40,8 @@ class DailyVolumesPlot(ClinicPlot):
     different window sizes.
 
     Methods:
+         create_dataset - Returns a new DataFrame with data for this visual
+         reset_y_range - Reapplies the full y-axis range in the visual
          get_figure - Returns the Bokeh figure object associated with the plot
          get_source - Returns the Bokeh ColumnDataSource object associated with the line glyphs
          get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
@@ -60,6 +62,13 @@ class DailyVolumesPlot(ClinicPlot):
                  rolling_df: pd.DataFrame,
                  start_dt: datetime,
                  ct: CrosshairTool) -> None:
+        """
+        Creates an instance of a daily volumes plot for the application document.
+        :param rolling_df: DataFrame containing the precalculated moving rate data
+        :param start_dt: The starting date for the plot x-axis
+        :param ct: A shared crosshair hover tool for all plots in the document
+        """
+
         data_df = self.create_dataset(rolling_df, '*ALL*')
         self.cds = ColumnDataSource(data=data_df)
 
@@ -143,6 +152,8 @@ class MovingVolumesPlot(ClinicPlot):
     sizes.
 
     Methods:
+         create_dataset - Returns a new DataFrame with data for this visual
+         reset_y_range - Reapplies the full y-axis range in the visual
          get_figure - Returns the Bokeh figure object associated with the plot
          get_source - Returns the Bokeh ColumnDataSource object associated with the line glyphs
          get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
@@ -172,6 +183,13 @@ class MovingVolumesPlot(ClinicPlot):
                  rolling_df: pd.DataFrame,
                  start_dt: datetime,
                  ct: CrosshairTool) -> None:
+        """
+        Creates an instance of a moving volumes plot for the application document.
+        :param rolling_df: DataFrame containing the precalculated moving rate data
+        :param start_dt: The starting date for the plot x-axis
+        :param ct: A shared crosshair hover tool for all plots in the document
+        """
+
         data_df = self.create_dataset(rolling_df, '*ALL*')
         self.cds = ColumnDataSource(data=data_df)
 
@@ -289,6 +307,8 @@ class MovingRatesPlot(ClinicPlot):
     moving rates that referrals are seen in 30d across different window sizes.
 
     Methods:
+         create_dataset - Returns a new DataFrame with data for this visual
+         reset_y_range - Reapplies the full y-axis range in the visual
          get_figure - Returns the Bokeh figure object associated with the plot
          get_source - Returns the Bokeh ColumnDataSource object associated with the line glyphs
          get_lines - Returns a list of Bokeh GlyphRenderer objects for the line glyphs
@@ -314,7 +334,13 @@ class MovingRatesPlot(ClinicPlot):
         return data_df
     # END _create_dataset
 
-    def __init__(self, rolling_df: pd.DataFrame, start_dt: datetime) -> None:
+    def __init__(self, rolling_df: pd.DataFrame, start_dt: datetime, ct: CrosshairTool) -> None:
+        """
+        Creates an instance of a moving rates plot for the application document.
+        :param rolling_df: DataFrame containing the precalculated moving rate data
+        :param start_dt: The starting date for the plot x-axis
+        :param ct: A shared crosshair hover tool for all plots in the document
+        """
         data_df = self.create_dataset(rolling_df, '*ALL*')
         self.cds = ColumnDataSource(data=data_df)
 
@@ -343,8 +369,7 @@ class MovingRatesPlot(ClinicPlot):
             toggleable=False
         )
 
-        height_overlay = Span(dimension="height", line_dash="solid", line_width=1, line_color='black')
-        self.ct = CrosshairTool(overlay=height_overlay, toggleable=False)
+        self.ct = ct
 
         self.plot = figure(title='Referrals Seen in 30 Days - Moving Rates',
                            output_backend='svg',
@@ -431,10 +456,6 @@ class MovingRatesPlot(ClinicPlot):
     def get_source(self) -> ColumnDataSource:
         """Returns the Bokeh ColumnDataSource object associated with the line glyphs"""
         return self.cds
-
-    def get_shared_crosshair(self) -> CrosshairTool:
-        """Returns the Bokeh model object associated with the crosshair tool"""
-        return self.ct
 
     def get_lines(self) -> list[GlyphRenderer]:
         """Returns a list of Bokeh GlyphRenderer objects for the line glyphs"""
@@ -574,25 +595,39 @@ class ConnectedYRangeSlider:
 
     def _update_slider_start(self, attr, old, new):
         """Updates the start value in the range slider's value tuple with the given new value."""
+        self.slider.remove_on_change('value', self._update_plot_range)
+
         new_value = list(self.slider.value)
         new_value[0] = new
         new_value = tuple(new_value)
         self.slider.update(start=0.0, end=1.0, value=new_value)
+
+        self.slider.on_change('value', self._update_plot_range)
     # END _update_slider_start
 
     def _update_slider_end(self, attr, old, new):
         """Updates the end value in the range slider's value tuple with the given new value."""
+        self.slider.remove_on_change('value', self._update_plot_range)
+
         new_value = list(self.slider.value)
         new_value[1] = new
         new_value = tuple(new_value)
         self.slider.update(start=0.0, end=1.0, value=new_value)
+
+        self.slider.on_change('value', self._update_plot_range)
     # END _update_slider_end
 
     def _update_plot_range(self, attr, old, new):
         """Updates the plot figure's y-axis start and end values from the given new range tuple."""
+        self.plot.y_range.remove_on_change('start', self._update_slider_start)
+        self.plot.y_range.remove_on_change('end', self._update_slider_end)
+
         new_value = list(new)
         self.plot.y_range.start = new_value[0]
         self.plot.y_range.end = new_value[1]
+
+        self.plot.y_range.on_change('start', self._update_slider_start)
+        self.plot.y_range.on_change('end', self._update_slider_end)
     # END _update_plot_range
 
     def get_slider_model(self) -> RangeSlider:
@@ -710,8 +745,8 @@ def process_record_transforms(df: pd.DataFrame) -> None:
     df['Referral Aged Yn'] = 0
     df.loc[idx, 'Referral Aged Yn'] = 1
 
-    # Create a convenience column to aggregate referrals that seen or checked in to an
-    # appointment at the same clinic
+    # Create a convenience column to identify referrals that are either tagged as seen
+    # or the patient checked in to an appointment at the same clinic
     idx = ~df['Date Patient Seen or Checked In'].isna()
     df['Referral Seen or Checked In Yn'] = 0
     df.loc[idx, 'Referral Seen or Checked In Yn'] = 1
@@ -872,6 +907,11 @@ def create_range_sliders(plots: list[figure]) -> tuple[ConnectedXDateRangeSlider
 # END create_range_sliders
 
 
+def create_shared_crosshair() -> CrosshairTool:
+    height_overlay = Span(dimension="height", line_dash="solid", line_width=1, line_color='black')
+    return CrosshairTool(overlay=height_overlay, toggleable=False)
+
+
 def add_layout(doc: Document,
                upper_plot: figure,
                middle_plot: figure,
@@ -904,10 +944,12 @@ print('processing record transforms...')
 process_record_transforms(referral_df)
 print('calculating rolling measures...')
 rolling_measures_df, first_measure_dt, last_measure_dt = calculate_rolling_measures(referral_df)
+
 print('adding Bokeh plots...')
-rates_plot = MovingRatesPlot(rolling_measures_df, first_measure_dt)
-volumes_plot = MovingVolumesPlot(rolling_measures_df, first_measure_dt, rates_plot.get_shared_crosshair())
-daily_plot = DailyVolumesPlot(rolling_measures_df, first_measure_dt, rates_plot.get_shared_crosshair())
+shared_crosshair = create_shared_crosshair()
+rates_plot = MovingRatesPlot(rolling_measures_df, first_measure_dt, shared_crosshair)
+volumes_plot = MovingVolumesPlot(rolling_measures_df, first_measure_dt, shared_crosshair)
+daily_plot = DailyVolumesPlot(rolling_measures_df, first_measure_dt, shared_crosshair)
 x_range_slider, y_range_slider = create_range_sliders([rates_plot.get_figure(),
                                                        volumes_plot.get_figure(),
                                                        daily_plot.get_figure()])
