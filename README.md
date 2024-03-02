@@ -8,13 +8,13 @@ usage: venv\Scripts\bokeh serve --show moving-process-rates.py
 
 ## Background
 One way to measure access to care is timeliness. Long delays to see a healthcare provider can speak to availability issues, either a lack of resources or inefficiencies that result in a less than optimal conversion of referrals into appointments. Long delays can also speak to accommodation issues or accessibility issues if patients have difficulty attending their scheduled appointments.
-This project is an example of visualizing moving process rates using the sample data for [this example report](https://907sjl.github.io/referrals-bokeh/) of referral process timings for specialty clinics.    
+This project is an example of visualizing moving process rates using the sample data from [this example report](https://907sjl.github.io/referrals-bokeh/) of referral process timings for specialty clinics.    
 
 Moving rates work well for ambulatory clinics, especially when the volume of visits is sometimes low or not consistent. Rates of process completion are already an average and so the moving rate approach 
-avoids calculating an average of an average with across inconsistent denominators such as the number of visits in a day or other period.    
+avoids calculating an average of an average across inconsistent denominators such as the number of visits in a day or other period.    
 
 ## Technology Stack
-This is a simple Bokeh app compared to the report example. It creates a few visuals and widgets with data but relies on Bokeh's built-in application server features 
+This is a simple Bokeh app example that uses a Python server. It creates a few visuals and widgets with data but relies on Bokeh's built-in application server features 
 to create the HTML layout and serve the application.    
 
 <img src="images/tech_stack.svg?raw=true" width="582" height="192" alt="SVG image: technology stack"/>    
@@ -24,8 +24,8 @@ These technologies are used by application layers that manage the data model, ap
 <img src="images/app_layers.svg?raw=true" width="362" height="372" alt="SVG image: application layers"/>    
 
 ### Python and Pandas    
-Flexibility and freedom also define another technology underlying this example, Python. Python is a general purpose programming language used to create 
-complex applications, to be the glue that integrates other software platforms, or to automate tasks with scripts. Using Python to create your analytic 
+Python is a general purpose programming language used to create 
+complex applications.  It is also used as the glue that integrates other software platforms, or to automate tasks with scripts. Using Python to create your analytic 
 deliverable ensures that you will have opportunities to automate tasks such as data refresh and report generation. BI tools limit your automation possibilities to 
 predetermined use cases. A report or dashboard developed using Python can be automated using Python. There are few licensing concerns with Python itself 
 and no paid subscriptions necessary.    
@@ -37,8 +37,8 @@ written in Python and using Pandas can be more elegant, efficient, and configura
 
 ### Bokeh    
 Bokeh provides data visualization and data interaction capabilities to the Python platform, using either notebooks or standalone programs. This example is a 
-standalone program written in Python that uses the Bokeh library along with Pandas. A program uses Bokeh to dynamically place glyphs and widgets on 
-the canvas of a plot using data sets. The placement, size, color, shape, and number of glyphs is totally within your control. This is 
+module written in Pythong that is executed as a standalone program when it is loaded by the built-in Bokeh server executable. A programmer uses Bokeh to dynamically 
+place glyphs and widgets on the canvas of a plot using data sets. The placement, size, color, shape, and number of glyphs is totally within your control. This is 
 in contrast to commercial BI tools with a set palette of visuals that you can easily drop onto a page-formatted canvas. BI tools limit you to the visuals 
 and options that they have built in order to provide speed and convenience.    
 
@@ -61,14 +61,14 @@ of the rate calculation across time introduces extra noise and defeats the smoot
 
 <img src="images/app_animated.gif?raw=true" height="440" alt="Animated GIF image: application"/>    
 
-The volume of referrals that are included in the rates is visualized under the moving rate chart as both a moving total and a daily total. The three charts have 
+The volume of referrals is visualized under the moving rate chart as both a moving total and a daily total. The three charts have 
 synchronized x-axis ranges so that the volumes always line up under the corresponding rate. Hovering over any of the charts displays a vertical line across all 
 three charts to help the viewer visually follow the data across the charts. A tooltip box with the actual y-axis values follows the mouse.    
 
 Viewers can interact with the charts by using the standard Bokeh tools to pan or zoom. As one chart is explored this way, the other charts automatically align 
 their x-axis with it.    
 
-A drop-down box to the right of the charts allows one clinic to be selected. The default is an aggregated rate for all clinics as one organization. When a clinic 
+A drop-down box to the right of the charts allows one clinic to be selected. When a clinic 
 is selected the charts are filtered, updated, and the y-axis adjusted to fit the new range.    
 
 Underneath the clinic drop-down is a group of toggle buttons with one button for each moving window size. These buttons will toggle the line for that window on 
@@ -93,8 +93,9 @@ between the client browser and the server.
 
 <img src="images/moving_rates_pkg.svg?raw=true" alt="SVG image: package diagram"/>    
 
-This isn't ideal for the loading and transformation of the data. The data load and transform could be placed into a module. Python module imports happen once 
-and are then cached. In this example the data is loaded and processed with each new session.    
+As-is the data loading and transformation happens each time a new client session is started. The data load and transform could be placed into a module. 
+Python module imports happen once and are then cached. Encapsulating the data load and persisting it within a separate module is a good idea if multiple 
+viewers use the application.    
 
 <img src="images/moving_rates_act.svg?raw=true" alt="SVG image: activity diagram"/>    
 
@@ -117,40 +118,41 @@ df[date_columns] = df[date_columns].apply(pd.to_datetime)
 return df
 ```    
 
-The data is then passed along to functions that calculate simple record-level facts and then derivative measures across different moving windows.    
+The data is then passed along to functions that calculate simple record-level facts and derivative measures across different moving windows.    
 
 ### Record Level Transforms    
 The **process_record_transforms()** function adds record-level transformations to the referrals dataset. This application charts the rate at which referrals 
 are seen within 30 days. Referrals are all measured and reported 31 days after the date when they were sent to the clinic, regardless of how long it actually 
-took to see any given referral. This provides a connotative consistency between the denominators of each daily rate in the moving rate chart.    
+took to see any given referral. This provides a connotative consistency between the denominators of each daily rate. The denominator each day contains the 
+number of referrals that were sent 31 days prior.    
 
-This date is added to the dataset for each referral as a convenience when calculating process measures.    
+The date that each referral reached 31 days of age is added to the dataset as a convenience column that is used when calculating process measures.    
 
 ```
 df['Date Referral Sent +31d'] = df['Date Referral Sent'] + pd.Timedelta(days=31)
 ```    
 
 Referrals in the source data can be tagged as *seen* by the clinic referral management system or if that system is not diligently used the patient may be 
-checked-in to an appointment at the same clinic after the referral was sent. In order to recognize either event this function adds a calculated date that 
+checked-in to an appointment at the same clinic without updating the referral. In order to recognize either event this function adds a calculated date that 
 coalesces both.    
 
 ```
 df['Date Patient Seen or Checked In'] = df['Date Referral Seen']
 idx = df['Date Patient Seen or Checked In'].isna()
-df.loc[idx, 'Date Patient Seen or Checked In'] = df.loc[
-    idx, 'Date Patient Checked In']
+df.loc[idx, 'Date Patient Seen or Checked In'] = df.loc[idx, 'Date Patient Checked In']
 ```    
 
-Then the function calculates the days for each referral to be seen using that date derived from both events.    
+Then the function calculates the days for each referral to be seen using that date derived from either event, the referral 
+is updated as seen or the patient is checked-in to the clinic.    
 
 ```
 df['Days until Patient Seen or Check In'] = (
-        (df['Date Patient Seen or Checked In'] - df[
-            'Date Referral Sent']) / pd.Timedelta(days=1))
+        (df['Date Patient Seen or Checked In'] - df['Date Referral Sent'])
+         / pd.Timedelta(days=1))
 idx = df['Date Patient Seen or Checked In'].isna()
 df.loc[idx, 'Days until Patient Seen or Check In'] = (
-        (df.loc[idx, 'As Of Date'] - df.loc[
-            idx, 'Date Referral Sent']) / pd.Timedelta(days=1))
+        (df.loc[idx, 'As Of Date'] - df.loc[idx, 'Date Referral Sent'])
+         / pd.Timedelta(days=1))
 ```    
 
 Referrals that haven't been seen yet are aged to the effective date of the referral dataset.    
@@ -179,7 +181,7 @@ calendar_df = create_calendar(start_dt, end_dt)
 source_df = pd.merge(calendar_df, referrals_df, how='left', left_on=['Date'], right_on=['Date Referral Sent +31d'])
 ```    
 
-The calendar is also merged with the referrals dataset so that a date in the calendar aligns with every referral on the date that referral should be 
+The calendar is then merged with the referrals dataset so that a date in the calendar aligns with every referral on the date that referral should be 
 measured and reported. With that calendar relationship in place the number of referrals to include in the denominator for each calendar day can be 
 calculated.    
 
@@ -190,10 +192,10 @@ count_by_date_df = (
     .rename(columns={'Referral Aged Yn': '# Aged'}))
 ```    
 
-The indicator column that was calculated to exclude referrals is used to count the number of referrals in the candidate population each day to have 
-been seen in 30 days.    
+The indicator column that was calculated to exclude referrals is used to count the number of referrals that are candidates to have been seen in 
+30 days.    
 
-The number of referrals seen in 30 days is calculated for the candidate population of referrals on each calendar date.    
+The number of referrals that were seen in 30 days is calculated using that same population of referrals, for each calendar date.    
 
 ```
 idx = (
@@ -206,8 +208,8 @@ count_by_date_df = (
     .rename(columns={'Referral Aged Yn': '# Seen in 30d'}))
 ```    
 
-The resulting datasets from both calculations are merged into a new, higher level dataset at the calendar granularity. Then the Pandas **rolling()** 
-function is invoked on that calendar level aggregate data to calculate the moving totals by day across multiple window sizes.    
+The aggregated counts by day are merged to create a new, higher level dataset at the calendar granularity. Then the Pandas **rolling()** 
+function is invoked on that aggregated dataset to calculate the moving totals by day across multiple window sizes.    
 
 ```
 window_name = f'{num_days}d'
@@ -220,7 +222,7 @@ measure_df = (
     .reset_index())
 ```    
 
-In this example the rolling calculation is performed within a function that takes the window size in days as a parameter. The function is called 
+In this example the rolling calculation is performed within a function that takes the window size as a parameter. The function is called 
 successively across a handful of window sizes.    
 
 ```
@@ -228,7 +230,7 @@ for days in [28, 91, 182, 364]:
     rolling_df = calculate_window_measures(rolling_df, days)
 ```    
 
-The numerators and denominators are totalled this way for each day and each moving window. The overall moving rate is then just an added column 
+The numerators and denominators are totalled this way for each day and for each moving window. The overall moving rates are then just an added column 
 that is calculated as the ratio.    
 
 ```
@@ -272,6 +274,8 @@ will always be synchronized between the charts when the mouse hovers over any on
 
 ```
 def __init__(self, rolling_df: pd.DataFrame, start_dt: datetime, ct: CrosshairTool) -> None:
+    data_df = self.create_dataset(rolling_df, '*ALL*')
+    self.cds = ColumnDataSource(data=data_df)
 ```    
 
 The constructor methods call one of the base class overrides, **create_dataset()** to create a specific dataset for the visual that includes the tooltip hover 
@@ -279,8 +283,19 @@ information. That dataset is assigned to a Bokeh ColumnDataSource and the Column
 later in response to widget events.    
 
 ```
-data_df = self.create_dataset(rolling_df, '*ALL*')
-self.cds = ColumnDataSource(data=data_df)
+@staticmethod
+def create_dataset(source_df: pd.DataFrame, clinic: str) -> pd.DataFrame:
+    data_df = source_df.loc[(source_df['Clinic'] == clinic),
+                            ['Date',
+                             'Moving 28d % Seen in 30d',
+                             'Moving 91d % Seen in 30d',
+                             ...
+                             'Moving 364d # Aged']].copy()
+    data_df['28d Tooltip'] = data_df['Moving 28d % Seen in 30d'] * 100.0
+    data_df['91d Tooltip'] = data_df['Moving 91d % Seen in 30d'] * 100.0
+    data_df['182d Tooltip'] = data_df['Moving 182d % Seen in 30d'] * 100.0
+    data_df['364d Tooltip'] = data_df['Moving 364d % Seen in 30d'] * 100.0
+    return data_df
 ```    
 
 The Bokeh figure is created in the typical manner but then also assigned to the plot class instance so that it can be referenced by other objects and by 
@@ -296,7 +311,7 @@ self.plot = figure(title='Referrals Seen in 30 Days - Moving Rates',
                    tools=[PanTool(), BoxZoomTool(), SaveTool(), ResetTool()])
 ```    
 
-The line glyphs in **MovingRatesPlot** and **MovingVolumesPlot** are simultaneously created and stored in an object level list so that they can be 
+The line glyphs in **MovingRatesPlot** and **MovingVolumesPlot** are stored in an object level list so that they can be 
 accessed by an event handler that mutes the same line in one chart when a line in the other chart is muted.    
 
 ```
@@ -348,8 +363,8 @@ self.clinic_select.on_change("value", self._clinic_slicer_callback)
 
 When the callback function is invoked it loops through the **ClinicPlot** instances that were passed in to the constructor and requests a new dataset for each using the 
 newly selected clinic name as a filter. The **create_dataset()** method is implemented by every class that implements the **ClinicPlot** base class. The new dataset for 
-each visual is transformed into a Python dictionary and assigned as the new data for the line glyphs in the Bokeh figure. Finally, the callback asks each plot instance 
-to reset its y-axis range in the manner implemented by that class. This transitions between the data range of one clinic to the range of another.    
+each visual is assigned as the new data for the line glyphs in the Bokeh figure. Finally, the callback asks each plot instance 
+to reset its y-axis range in the manner implemented by that class. This axis reset transitions between the data range of one clinic to the range of another.    
 
 ```
 def _clinic_slicer_callback(self, attr: str, old, new) -> None:
@@ -417,18 +432,18 @@ self.plot.y_range.on_change('start', self._update_slider_start)
 self.plot.y_range.on_change('end', self._update_slider_end)
 ```    
 
-The value of a range slider is stored as a tuple of the starting and ending positions. That tuple is decomposed into a list with both values and those values are 
+The value of a range slider is stored as a tuple of the starting and ending positions. That tuple is decomposed into a list and the values are 
 applied to the y-axis range start and end.    
 
-Bidirectional update events can reflect the y-axis update back to the slider. In principle the slider value wouldn't be 
-changed but the event handler would still set the slider's value even if it is the same. Best to make sure that the update does not 
-reflect back to the slider as another change event.    
+When the slider is adjusted, and the callback changes the y-axis range of the chart, the bidirectional update events can reflect the y-axis update back to 
+the slider. In principle the slider value wouldn't be changed but the event handler would still attempt to set the slider's value even if it is the same value. 
+Best to make sure that the update does not reflect back to the slider as another change event.    
 
 Calling **remove_on_change()** temporarily removes the callback from the plot right before setting the new y-axis range. The callback 
 is then replaced right after the update has been made.    
 
 **ConnectedXDateRangeSlider** works similarly but coordinates x-axis ranges across three plots and the slider. Its constructor creates a Bokeh *DateRangeSlider* 
-and sets up event handlers dynamically using a list of Bokeh figures.    
+and sets up event handlers dynamically using a list of the Bokeh figures to connect with.    
 
 ```
 self.slider = DateRangeSlider(title=title, start=start, end=end, step=step, value=value)
@@ -442,16 +457,17 @@ for plot in self.plots:
     plot.x_range.on_change('end', cb)
 ```    
 
-Python's **partial()** function is used to generate new callback functions for each plot at runtime. The new functions call a template callback function 
-**_update_ranges_from_plot()** that has an extra parameter for the plot that the callback was attached to. The newly created function will pass the value 
-found in the plot variable when the function was created using **partial()**. This only works using **partial()**, because it binds the argument by value 
-instead of by reference. **_update_ranges_from_plot()** needs the figure object that it was attached to and Bokeh will not pass that as an argument when 
-invoking an event handler.    
+Python's *partial()* function is used to generate new callback functions for each plot at runtime. The new functions call a template callback function 
+**_update_ranges_from_plot()**. The template function has an extra parameter for the plot that the callback was attached to. Bokeh will not pass this 
+parameter to the callback at runtime. The new function created by *partial()* will pass the extra parameter to the template function at runtime using 
+the value that was passed to *partial()* in the plot parameter. The extra parameter is passed to the template function as a static value instead of a 
+reference to a variable. This only works using *partial()* to create a new function at runtime.    
 
-When a plot is zoomed or panned it will trigger the callback function in response to the x-axis changing. The callback must update the x-axis ranges of 
-the other two charts to match the new range on the chart that was adjusted. The list of Bokeh figures that are connected in this way is stored 
-in the **ConnectedXDateRangeSlider** instance along with the callback functions that are attached to each. The callback function must first remove the 
-callback functions from the slider and the other figures before making an update that might reflect back from all of them.    
+When a plot is zoomed or panned it will trigger these dynamically created callback functions in response to the x-axis changing. The callback must update 
+the x-axis ranges of the other two charts to match the new range on the chart that was adjusted. In order to do this the callback must have access to the 
+list of plots that were connected to each other in this way. This list of Bokeh figures is stored in the **ConnectedXDateRangeSlider** instance. Since all 
+three plots are connected to each other in a mesh we also must prevent changes from reflecting through the charts as new events. The callback function must 
+first remove the callback functions from the slider and the other figures before making an update that might reflect back from all of them.    
 
 ```
 self.slider.remove_on_change('value', self._update_plot_ranges_from_slider)
@@ -462,8 +478,7 @@ for plot, cb in zip(self.plots, self.callbacks):
 ```    
 
 This is where the callback function makes use of that extra argument holding the plot object that triggered this event. The callback functions are 
-removed from all plots in the list except that one. Then again that plot object is referenced in a loop to set the x-axis range of all plots except the plot 
-that triggered this event.    
+removed from all plots in the list except that one, and the x-axis ranges are updated in all plots in the list except the one that triggered the event.    
 
 ```
 for plot in self.plots:
@@ -479,8 +494,8 @@ x-axis range across all of them.
 ![Animated GIF: Muting line colors](images/muting.gif)    
 
 Bokeh supports muting the colors of line glyphs by clicking on the corresponding item in the plot legend. This app has two plots with moving measures over time. Both plots 
-have lines tracking the values for different window sizes: 28 days, 91 days, 182 days, and 364 days. The lines in both plots use the same color and style for the 
-same window size. Just one legend in the top, larger, plot suffices for both plots. When a line in the top plot is muted using the legend the corresponding line in 
+have lines tracking the values for different window sizes: 28 days, 91 days, 182 days, and 364 days. The lines in both plots use the same colors and styles. 
+Just one legend in the top, larger, plot suffices for both plots. When a line in the top plot is muted using the legend the corresponding line in 
 the second plot should be muted as well.    
 
 The classes that encapsulate the two plots also provide a method for accessing the list of lines that were added to each of their figures. After the classes are 
@@ -504,7 +519,7 @@ This adds a separate callback for each pair of lines between the plots.
 ### Showing and Hiding Lines    
 ![Button group to show and hide lines](images/button_group.jpg)    
 
-Four different moving window sizes can be added to the plot. By default, the charts only show the 91 day and 364 day windows. A Bokeh *CheckboxButtonGroup* to the right 
+Four different lines can be viewed in the plots of moving rates. By default, the charts only show the lines for the 91 day and 364 day moving windows. A Bokeh *CheckboxButtonGroup* to the right 
 of the plots allows each of the four lines to be shown or hidden by toggling the state of its corresponding button in the group.    
 
 ```

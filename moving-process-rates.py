@@ -726,15 +726,14 @@ def process_record_transforms(df: pd.DataFrame) -> None:
     # Days until the referral tagged as seen or patient checked into clinic appointment
     df['Date Patient Seen or Checked In'] = df['Date Referral Seen']
     idx = df['Date Patient Seen or Checked In'].isna()
-    df.loc[idx, 'Date Patient Seen or Checked In'] = df.loc[
-        idx, 'Date Patient Checked In']
+    df.loc[idx, 'Date Patient Seen or Checked In'] = df.loc[idx, 'Date Patient Checked In']
     df['Days until Patient Seen or Check In'] = (
-            (df['Date Patient Seen or Checked In'] - df[
-                'Date Referral Sent']) / pd.Timedelta(days=1))
+            (df['Date Patient Seen or Checked In'] -
+             df['Date Referral Sent']) / pd.Timedelta(days=1))
     idx = df['Date Patient Seen or Checked In'].isna()
     df.loc[idx, 'Days until Patient Seen or Check In'] = (
-            (df.loc[idx, 'As Of Date'] - df.loc[
-                idx, 'Date Referral Sent']) / pd.Timedelta(days=1))
+            (df.loc[idx, 'As Of Date'] - df.loc[idx, 'Date Referral Sent'])
+            / pd.Timedelta(days=1))
 
     # Create a convenience column to aggregate referrals that are sent and not
     # rejected, canceled, or closed without being seen
